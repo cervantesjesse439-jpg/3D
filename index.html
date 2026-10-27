@@ -14,6 +14,13 @@
         .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: #3b82f6; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .glass-panel { background: #1a1c23; border: 1px solid #2d313a; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+        
+        /* Animaciones para los pasos de carga */
+        .step-active { color: #3b82f6; font-weight: bold; }
+        .step-active .dot { background-color: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.8); }
+        .step-done { color: #10b981; }
+        .step-done .dot { background-color: #10b981; }
+        .dot { transition: all 0.3s ease; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4">
@@ -29,8 +36,8 @@
             </div>
         </div>
         <div class="flex items-center gap-2 bg-[#1a1c23] px-3 py-1.5 rounded-full border border-gray-700">
-            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" id="conn-dot"></div>
-            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest" id="conn-text">Conectando...</span>
+            <div class="w-2 h-2 rounded-full bg-red-500" id="conn-dot"></div>
+            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest" id="conn-text">Desconectado</span>
         </div>
     </div>
 
@@ -45,13 +52,37 @@
     </div>
 
     <!-- LOADING UI -->
-    <div id="loading-screen" class="hidden w-full max-w-md glass-panel rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all duration-300 min-h-[300px]">
-        <div class="spinner mb-6"></div>
-        <h2 class="text-lg font-bold text-white mb-2 tracking-wide uppercase">Laptop Trabajando</h2>
-        <p id="status-text" class="text-blue-400 text-sm font-bold bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/50 mt-2">
-            Iniciando IA...
-        </p>
-        <p class="text-gray-500 text-[10px] mt-4 uppercase tracking-widest">Verificando regla 45° y bases planas</p>
+    <div id="loading-screen" class="hidden w-full max-w-md glass-panel rounded-2xl p-6 flex flex-col transition-all duration-300 min-h-[300px]">
+        <div class="flex items-center gap-4 mb-6 border-b border-gray-700 pb-4">
+            <div class="spinner !w-8 !h-8 !border-2"></div>
+            <div>
+                <h2 class="text-sm font-bold text-white tracking-wide uppercase">Laptop Trabajando</h2>
+                <p id="status-text" class="text-blue-400 text-[10px] font-bold mt-1 uppercase tracking-widest">Iniciando...</p>
+            </div>
+        </div>
+        
+        <!-- Tracker de Pasos -->
+        <div class="flex flex-col gap-4 pl-2 relative">
+            <!-- Línea conectora -->
+            <div class="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-800 rounded-full z-0"></div>
+            
+            <div class="flex items-center gap-4 relative z-10 text-gray-600 text-xs uppercase tracking-widest" id="step-1">
+                <div class="dot w-2 h-2 rounded-full bg-gray-700 ring-4 ring-[#1a1c23]"></div>
+                <span>Contactando IA</span>
+            </div>
+            <div class="flex items-center gap-4 relative z-10 text-gray-600 text-xs uppercase tracking-widest" id="step-2">
+                <div class="dot w-2 h-2 rounded-full bg-gray-700 ring-4 ring-[#1a1c23]"></div>
+                <span>Programando Código 3D</span>
+            </div>
+            <div class="flex items-center gap-4 relative z-10 text-gray-600 text-xs uppercase tracking-widest" id="step-3">
+                <div class="dot w-2 h-2 rounded-full bg-gray-700 ring-4 ring-[#1a1c23]"></div>
+                <span>Validando Geometría Física</span>
+            </div>
+            <div class="flex items-center gap-4 relative z-10 text-gray-600 text-xs uppercase tracking-widest" id="step-4">
+                <div class="dot w-2 h-2 rounded-full bg-gray-700 ring-4 ring-[#1a1c23]"></div>
+                <span>Renderizando Previsualización</span>
+            </div>
+        </div>
     </div>
 
     <!-- RESULT UI -->
@@ -100,18 +131,49 @@
         const db = getFirestore(app);
         let currentDocId = null;
         let unsubscribe = null; // Para detener la escucha de documentos cuando termine
+        let lastSeenBackend = 0; // Para el Heartbeat
+
+        // Actualizar visual de pasos
+        function updateSteps(currentStep) {
+            for(let i=1; i<=4; i++) {
+                const el = document.getElementById(`step-${i}`);
+                el.className = "flex items-center gap-4 relative z-10 text-xs uppercase tracking-widest " + 
+                    (i < currentStep ? "step-done" : (i === currentStep ? "step-active" : "text-gray-600"));
+            }
+        }
 
         document.addEventListener("DOMContentLoaded", async () => {
             const connText = document.getElementById('conn-text');
+            const connDot = document.getElementById('conn-dot');
             
             try {
                 await signInAnonymously(auth);
-                connText.innerText = "Laptop Lista";
-                connText.style.color = "#10b981"; // Verde
+                
+                // Escuchar el Heartbeat (latido) que manda la laptop
+                onSnapshot(doc(db, "solicitudes_3d_status", "backend"), (docSnap) => {
+                    if (docSnap.exists()) {
+                        lastSeenBackend = docSnap.data().last_seen;
+                    }
+                });
+
+                // Bucle para actualizar la luz de conexión en tiempo real
+                setInterval(() => {
+                    const now = Date.now();
+                    // Si recibimos señal en los últimos 15 segundos, está viva
+                    if (now - lastSeenBackend < 15000) {
+                        connText.innerText = "Laptop Lista";
+                        connText.style.color = "#10b981"; // Verde
+                        connDot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
+                    } else {
+                        connText.innerText = "Laptop Inactiva";
+                        connText.style.color = "#ef4444"; // Rojo
+                        connDot.className = "w-2 h-2 rounded-full bg-red-500";
+                    }
+                }, 2000);
+
             } catch(e) {
                 connText.innerText = "Error Auth";
-                document.getElementById('conn-dot').classList.remove('bg-green-500');
-                document.getElementById('conn-dot').classList.add('bg-red-500');
+                connDot.className = "w-2 h-2 rounded-full bg-red-500";
             }
 
             const promptInput = document.getElementById("prompt");
@@ -122,7 +184,8 @@
                 if (!promptText) return;
 
                 switchUI('loading');
-                document.getElementById("status-text").innerText = "Enviando solicitud...";
+                document.getElementById("status-text").innerText = "Enviando orden a casa...";
+                updateSteps(1);
 
                 try {
                     // CUIDADO: Usamos "solicitudes_3d", NO "rechazos_delta"
@@ -130,7 +193,8 @@
                         prompt: promptText,
                         status: 'pending',
                         timestamp: Date.now(),
-                        message: 'Esperando laptop...'
+                        message: 'Esperando laptop...',
+                        step: 1
                     });
                     
                     currentDocId = docRef.id;
@@ -142,11 +206,15 @@
                             
                             if (data.status === 'processing') {
                                 document.getElementById("status-text").innerText = data.message || "Modelando...";
+                                if(data.step) updateSteps(data.step);
                             } 
                             else if (data.status === 'done' && data.image_base64) {
                                 // IA terminó exitosamente
-                                switchUI('result');
-                                document.getElementById("result-image").src = "data:image/png;base64," + data.image_base64;
+                                updateSteps(4);
+                                setTimeout(() => {
+                                    switchUI('result');
+                                    document.getElementById("result-image").src = "data:image/png;base64," + data.image_base64;
+                                }, 800); // Pausa para que alcance a ver que todo se completó
                             } 
                             else if (data.status === 'error') {
                                 document.getElementById("status-text").innerText = "Error: " + data.message;
