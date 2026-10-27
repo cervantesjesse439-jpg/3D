@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creador 3D IA - Celular</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #12141a; color: #e2e8f0; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: #3b82f6; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .glass-panel { background: #1a1c23; border: 1px solid #2d313a; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Header -->
+    <div class="w-full max-w-md flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-600 flex items-center justify-center text-white rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                <i class="fas fa-cube text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-black tracking-widest text-white m-0">MAKER<span class="text-blue-500">AI</span></h1>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 bg-[#1a1c23] px-3 py-1.5 rounded-full border border-gray-700">
+            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" id="conn-dot"></div>
+            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest" id="conn-text">Conectando...</span>
+        </div>
+    </div>
+
+    <!-- MAIN UI: Pedir Modelo -->
+    <div id="main-ui" class="w-full max-w-md glass-panel rounded-2xl p-6 transition-all duration-300">
+        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><i class="fas fa-magic mr-2"></i>Nuevo Modelo 3D</h2>
+        <textarea id="prompt" class="w-full h-32 bg-[#12141a] border border-gray-700 rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 transition-all resize-none shadow-inner" placeholder="Ej: Un soporte de pared para el celular con una base completamente plana para imprimir fácil..."></textarea>
+        
+        <button id="btn-generate" class="w-full mt-5 bg-blue-600 hover:bg-blue-500 py-3.5 rounded-xl font-bold text-white transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center justify-center gap-2 uppercase tracking-wide text-sm">
+            <i class="fas fa-cogs"></i> Generar y Validar Geometría
+        </button>
+    </div>
+
+    <!-- LOADING UI -->
+    <div id="loading-screen" class="hidden w-full max-w-md glass-panel rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all duration-300 min-h-[300px]">
+        <div class="spinner mb-6"></div>
+        <h2 class="text-lg font-bold text-white mb-2 tracking-wide uppercase">Laptop Trabajando</h2>
+        <p id="status-text" class="text-blue-400 text-sm font-bold bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/50 mt-2">
+            Iniciando IA...
+        </p>
+        <p class="text-gray-500 text-[10px] mt-4 uppercase tracking-widest">Verificando regla 45° y bases planas</p>
+    </div>
+
+    <!-- RESULT UI -->
+    <div id="result-screen" class="hidden w-full max-w-md glass-panel rounded-2xl p-6 transition-all duration-300">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-bold text-green-400 uppercase tracking-widest"><i class="fas fa-check-circle mr-1"></i> 100% Imprimible</h2>
+            <span class="text-[10px] text-gray-500 bg-gray-800 px-2 py-1 rounded">VISTA PREVIA</span>
+        </div>
+        
+        <!-- Render del Modelo -->
+        <div class="w-full bg-[#12141a] rounded-xl mb-6 overflow-hidden flex items-center justify-center border border-gray-700 shadow-inner relative" style="height: 250px;">
+            <img id="result-image" src="" alt="Render 3D" class="max-h-full max-w-full object-contain p-2 relative z-10">
+            <!-- Grid de fondo para simular software 3D -->
+            <div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#3b82f6 1px, transparent 1px), linear-gradient(90deg, #3b82f6 1px, transparent 1px); background-size: 20px 20px;"></div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+            <button id="btn-save" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 uppercase tracking-wide text-sm">
+                <i class="fas fa-save"></i> Guardar en Laptop
+            </button>
+            <button id="btn-modify" class="w-full bg-[#2d313a] hover:bg-[#3f4452] py-3 rounded-xl font-bold text-white border border-gray-600 transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-sm">
+                <i class="fas fa-edit"></i> Modificar Modelo
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Misma versión que usas en tu analítica) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // TU CONFIGURACIÓN EXACTA (No tocará rechazos_delta, usaremos otra carpeta)
+        const firebaseConfig = {
+            apiKey: "AIzaSyC6-UX4jsL4nfyprVw1PviZzHwnKbWLipA",
+            authDomain: "delta-9c75f.firebaseapp.com",
+            projectId: "delta-9c75f",
+            storageBucket: "delta-9c75f.firebasestorage.app",
+            messagingSenderId: "901178031655",
+            appId: "1:901178031655:web:5d7f41aedede352ea71802",
+            measurementId: "G-0QY5CJP0ED"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        let currentDocId = null;
+        let unsubscribe = null; // Para detener la escucha de documentos cuando termine
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            const connText = document.getElementById('conn-text');
+            
+            try {
+                await signInAnonymously(auth);
+                connText.innerText = "Laptop Lista";
+                connText.style.color = "#10b981"; // Verde
+            } catch(e) {
+                connText.innerText = "Error Auth";
+                document.getElementById('conn-dot').classList.remove('bg-green-500');
+                document.getElementById('conn-dot').classList.add('bg-red-500');
+            }
+
+            const promptInput = document.getElementById("prompt");
+            const btnGenerate = document.getElementById("btn-generate");
+            
+            btnGenerate.addEventListener("click", async () => {
+                const promptText = promptInput.value.trim();
+                if (!promptText) return;
+
+                switchUI('loading');
+                document.getElementById("status-text").innerText = "Enviando solicitud...";
+
+                try {
+                    // CUIDADO: Usamos "solicitudes_3d", NO "rechazos_delta"
+                    const docRef = await addDoc(collection(db, "solicitudes_3d"), {
+                        prompt: promptText,
+                        status: 'pending',
+                        timestamp: Date.now(),
+                        message: 'Esperando laptop...'
+                    });
+                    
+                    currentDocId = docRef.id;
+
+                    // Escuchar cambios hechos por la laptop
+                    unsubscribe = onSnapshot(doc(db, "solicitudes_3d", currentDocId), (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = snapshot.data();
+                            
+                            if (data.status === 'processing') {
+                                document.getElementById("status-text").innerText = data.message || "Modelando...";
+                            } 
+                            else if (data.status === 'done' && data.image_base64) {
+                                // IA terminó exitosamente
+                                switchUI('result');
+                                document.getElementById("result-image").src = "data:image/png;base64," + data.image_base64;
+                            } 
+                            else if (data.status === 'error') {
+                                document.getElementById("status-text").innerText = "Error: " + data.message;
+                                document.getElementById("status-text").classList.add("text-red-400", "bg-red-900/20", "border-red-900/50");
+                                setTimeout(() => switchUI('main'), 4000);
+                            }
+                        }
+                    });
+
+                } catch (e) {
+                    alert("Error conectando a la base de datos: " + e.message);
+                    switchUI('main');
+                }
+            });
+
+            document.getElementById("btn-modify").addEventListener("click", () => {
+                switchUI('main');
+                promptInput.value = "Modifica el modelo anterior para que: ";
+                promptInput.focus();
+                if(unsubscribe) unsubscribe();
+            });
+
+            document.getElementById("btn-save").addEventListener("click", async () => {
+                if(currentDocId) {
+                    await updateDoc(doc(db, "solicitudes_3d", currentDocId), { status: 'save_requested' });
+                    alert("¡Modelo guardado en tu laptop listo para imprimir!");
+                }
+                switchUI('main');
+                promptInput.value = "";
+                if(unsubscribe) unsubscribe();
+            });
+
+            function switchUI(state) {
+                document.getElementById("main-ui").classList.add("hidden");
+                document.getElementById("loading-screen").classList.add("hidden");
+                document.getElementById("result-screen").classList.add("hidden");
+                document.getElementById("status-text").classList.remove("text-red-400", "bg-red-900/20", "border-red-900/50");
+
+                if(state === 'main') document.getElementById("main-ui").classList.remove("hidden");
+                if(state === 'loading') document.getElementById("loading-screen").classList.remove("hidden");
+                if(state === 'result') document.getElementById("result-screen").classList.remove("hidden");
+            }
+        });
+    </script>
+</body>
+</html>
